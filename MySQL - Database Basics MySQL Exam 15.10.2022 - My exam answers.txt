@@ -1,0 +1,215 @@
+MySQL_Workbench_Database_Basics_MySQL_Exam_15_Oct_2022
+
+
+-- 01. CREATE TABLES
+
+CREATE TABLE `products` (
+    `id` INT PRIMARY KEY AUTO_INCREMENT,
+    `name` VARCHAR(30) NOT NULL UNIQUE,
+    `type` VARCHAR(30) NOT NULL,
+    `price` DECIMAL(10 , 2 ) NOT NULL
+);
+
+CREATE TABLE `clients` (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    birthdate DATE NOT NULL,
+    card VARCHAR(50),
+    review TEXT
+);
+
+CREATE TABLE `tables` (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    floor INT NOT NULL,
+    reserved TINYINT(1),
+    capacity INT NOT NULL
+);
+
+CREATE TABLE `waiters` (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(50) NOT NULL,
+    phone VARCHAR(50),
+    salary DECIMAL(10 , 2 )
+);
+    
+CREATE TABLE orders (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    table_id INT NOT NULL,
+    waiter_id INT NOT NULL,
+    order_time TIME NOT NULL,
+    payed_status TINYINT(1)
+);
+
+CREATE TABLE orders_clients (
+    order_id INT,
+    CONSTRAINT fk_orders_clients_orders FOREIGN KEY (order_id)
+        REFERENCES orders (id),
+    client_id INT,
+    CONSTRAINT fk_orders_clients_clients FOREIGN KEY (client_id)
+        REFERENCES clients (id)
+);
+  
+CREATE TABLE orders_products (
+    order_id INT,
+    CONSTRAINT fk_orders_products_orders FOREIGN KEY (order_id)
+        REFERENCES orders (id),
+    product_id INT,
+    CONSTRAINT fk_orders_products_products FOREIGN KEY (product_id)
+        REFERENCES products (id)
+);
+
+alter table `orders`
+add constraint fk_orders_tables
+foreign key (`table_id`)
+references `tables`(`id`);
+
+alter table `orders`
+add constraint fk_orders_waiters
+foreign key (waiter_id)
+references waiters(id);
+
+
+
+-- 02. INSERT
+
+insert into products(name, type, price)
+(select
+    (concat(last_name, ' ', "specialty")),
+    ('Cocktail'),
+    (ceiling(salary*0.01))
+    from waiters
+    where id > 6
+   );
+
+
+
+-- 03. UPDATE
+
+update orders
+set table_id = table_id - 1
+where id between 12 and 23;
+
+
+
+-- 04. DELETE
+
+delete w from waiters as w
+left join orders as o on w.id = o.waiter_id
+where o.id is null;
+
+
+
+-- 05. CLIENTS (query)
+
+select
+c.id,
+c.first_name,
+c.last_name,
+c.birthdate,
+c.card,
+c.review
+from clients as c
+order by c.birthdate desc, id desc;
+
+
+
+-- 06. BIRTHDATE (query)
+
+select
+first_name,
+last_name,
+birthdate,
+review
+from clients
+where card is null 
+and year(birthdate) between 1978 and 1993
+order by last_name desc, id
+limit 5;
+
+
+
+-- 07. ACCOUNTS (query)
+
+select
+concat(last_name, first_name, char_length(first_name), 'Restaurant') as username,
+reverse(substring(email, 2, 12)) as password 
+from waiters
+where salary is not null
+order by password desc;
+
+
+
+-- 08. AVAILABILITY (query)
+
+select
+p.id,
+p.name,
+count(p.name) as count
+from products as p
+left join orders_products as op on p.id = op.product_id
+left join orders as o on op.order_id = o.id
+group by p.name
+having count >= 5
+order by count desc, name;
+
+
+
+-- 09. EXTRACT BILL (query)
+
+SELECT 
+    t.id,
+    t.capacity,
+    COUNT(oc.order_id) AS 'count_clients',
+    CASE
+        WHEN t.capacity > COUNT(oc.order_id) THEN 'Free seats'
+        WHEN t.capacity = COUNT(oc.order_id) THEN 'Full'
+        ELSE 'Extra seats'
+    END AS 'availability'
+FROM
+    tables AS t
+        JOIN
+    orders AS o ON t.id = o.table_id
+        LEFT JOIN
+    orders_clients AS oc ON o.id = oc.order_id
+WHERE
+    t.floor = 1
+GROUP BY t.id
+ORDER BY t.id DESC;
+
+
+
+-- 10. EXTRACT BILL (user defined function)
+
+create function udf_client_bill (full_name VARCHAR(50))
+returns decimal(19,2)
+deterministic
+begin
+	declare total_price decimal(19,2);
+    set total_price := (
+		select sum(price) 
+        from products as p
+        join orders_products as op on p.id = op.product_id
+        join orders as o on op.order_id = o.id
+        join orders_clients as oc on o.id = oc.order_id
+        join clients as c on oc.client_id = c.id        
+        where concat(first_name, ' ', last_name) = full_name);   
+    return total_price;
+end
+
+
+
+-- 11. HAPPY HOUR (stored procedure)
+
+create procedure udp_happy_hour (type varchar(50))
+begin
+	update products as p
+    set p.price = (p.price - (p.price * 0.20))
+    where p.price >= 10.00
+    and p.type = type;
+    
+end
+
+
